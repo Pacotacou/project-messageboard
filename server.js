@@ -7,7 +7,9 @@ const cors        = require('cors');
 const apiRoutes         = require('./routes/api.js');
 const fccTestingRoutes  = require('./routes/fcctesting.js');
 const runner            = require('./test-runner');
+const helmet = require('helmet');
 
+require('./db-connection.js')
 const app = express();
 
 app.use('/public', express.static(process.cwd() + '/public'));
@@ -16,6 +18,10 @@ app.use(cors({origin: '*'})); //For FCC testing purposes only
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// security
+const security = require('./security.js')
+security(app,helmet);
 
 //Sample front-end
 app.route('/b/:board/')
