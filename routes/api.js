@@ -10,9 +10,9 @@ module.exports = function (app) {
   .post(async (req, res) => {
     try {
       const { text, delete_password } = req.body;
-      let board = req.body.board;
+      let board = req.params.board;
       if (!board) {
-        board = req.params.board;
+        return res.status(400).json({ error: 'Missing board' });
       }
 
       if (!text || !delete_password) {
@@ -93,7 +93,7 @@ module.exports = function (app) {
   // delete thread
   .delete(async (req, res) =>{
     try {
-      const { board, id: thread_id, password: delete_password } = req.body;
+      let { board, id: thread_id, password: delete_password } = req.body;
       if (!board) {
         board = req.params.board;
       }
@@ -125,6 +125,41 @@ module.exports = function (app) {
       console.error('Delete thread error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
+  })
+  .get(async (req, res) => {
+    try {
+      const { board } = req.params;
+
+      const boardData = await BoardModel.findOne({ name: board })
+        .lean()
+        .select('-__v');
+
+      if (!boardData) {
+        return res.status(404).json({ error: 'Board not found' });
+      }
+
+      const processedThreads = boardData.threads
+        .sort((a,b) => new Date(b.bumped_on) - new Date(a.bumped_on))
+        .slice(0, 10)
+        .map(thread => ({
+          _id: thread._id,
+          text: thread.text,
+          created_on: thread.created_on,
+          replies: thread.replies
+            .sort((a,b) => new Date(b.created_on) - new Date(a.created_on))
+            .slice(0,3)
+            .map(reply => ({
+              _id: reply._id,
+              text: reply.text,
+              created_on: reply.created_on
+            }))
+        }));
+      
+      res.json(processedThreads);
+    } catch (error) {
+      console.error('Error fetching threads: ', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   // new reply
@@ -137,12 +172,12 @@ module.exports = function (app) {
         return res.status(400).json({ error: 'Missing arguments' });
       }
       // find board
-      boardData = await BoardModel.findOne({ name: board });
+      const boardData = await BoardModel.findOne({ name: board });
       if (!boardData){
         return res.status(400).json({ error: 'Board not found' });
       }
       // find thread
-      thread = boardData.threads.id(thread_id);
+      const thread = boardData.threads.id(thread_id);
       if (!thread){
         return res.status(400).json({ error: 'Thread not found' });
       }
@@ -168,7 +203,7 @@ module.exports = function (app) {
       if (!board || !thread_id || !reply_id){
         return res.status(400).json({ error: 'Missing arguments' });
       }
-      const boardData = await BoardModel.findOne({ name: board });
+      const boardData = await BoardModel.findOne({ name: String(board) });
       if (!boardData) {
         return res.status(400).json({ error: 'Board not found' });
       }
@@ -196,26 +231,31 @@ module.exports = function (app) {
       if (!board || !thread_id || !delete_password) {
         return res.status(400).json({ error: 'Missing arguments' });
       }
-      const boardData = await BoardModel.find({ name: board });
+      const boardData = await BoardModel.findOne({ name: board });
       if (!boardData) {
         return res.status(400).json({ error: 'Board not found' });
       }
-      const thread = boardData.threads.id(thread_id);
+      const thread = boardData.threads.id(thread_id)
       if (!thread) {
         return res.status(400).json({ error: 'Thread not found' });
       }
       const reply = thread.replies.id(reply_id);
+
       if (!reply) {
         return res.status(400).json({ error: 'Reply not found' });
       }
+      if (reply.delete_password !== delete_password) {
+        return res.status(400).json({ error: "Incorrect password" });
+      }
       reply.deleteOne()
-      boardData.save()
+      await boardData.save()
       res.status(200).json({ message: 'Reply delete successful'});
     } catch (error) {
       console.error('Error on Reply delete', error);
       res.status(500).json({ error: 'Server internal error' });
     }
   });
+
 
 
 };
