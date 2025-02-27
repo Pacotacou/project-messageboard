@@ -18,12 +18,13 @@ module.exports = function (app) {
       if (!text || !delete_password) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
+      const newDate = Date.now()
 
       const newThread = new ThreadModel({
         text,
         delete_password,
-        created_on: new Date(),
-        bumped_on: new Date(),
+        created_on: newDate,
+        bumped_on: newDate,
         replies: []
       });
 
@@ -81,10 +82,7 @@ module.exports = function (app) {
       delete response.delete_password;
       delete response.reported;
 
-      res.json({ 
-        message: 'Thread reported succesfully',
-        thread: response
-      });
+      res.status(201).send('reported')
     } catch (error) {
       console.error('Error reporting the thread:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -129,7 +127,7 @@ module.exports = function (app) {
   .get(async (req, res) => {
     try {
       const { board } = req.params;
-
+      const { thread_id } = req.query;
       const boardData = await BoardModel.findOne({ name: board })
         .lean()
         .select('-__v');
@@ -138,24 +136,45 @@ module.exports = function (app) {
         return res.status(404).json({ error: 'Board not found' });
       }
 
-      const processedThreads = boardData.threads
-        .sort((a,b) => new Date(b.bumped_on) - new Date(a.bumped_on))
-        .slice(0, 10)
-        .map(thread => ({
+      if ( thread_id ){
+        const thread = boardData.threads.filter(e => e._id === thread_id)[0];
+        if (!thread) {
+          return res.status(404).json({ error: 'Thread id not found' });
+        }
+        
+        const result = {
           _id: thread._id,
           text: thread.text,
           created_on: thread.created_on,
-          replies: thread.replies
-            .sort((a,b) => new Date(b.created_on) - new Date(a.created_on))
-            .slice(0,3)
-            .map(reply => ({
-              _id: reply._id,
-              text: reply.text,
-              created_on: reply.created_on
-            }))
-        }));
-      
-      res.json(processedThreads);
+          bumped_on: thread.bumped_on,
+          replies: thread.replies.map(r => ({
+            _id: r._id,
+            text: r.text,
+            created_on: r.created_on
+          }))
+        };
+        console.log('result: ', result)
+        return res.status(201).json(result)
+      }else{
+        const processedThreads = boardData.threads
+          .sort((a,b) => new Date(b.bumped_on) - new Date(a.bumped_on))
+          .slice(0, 10)
+          .map(thread => ({
+            _id: thread._id,
+            text: thread.text,
+            created_on: thread.created_on,
+            bumped_on: thread.bumped_on,
+            replies: thread.replies
+              .sort((a,b) => new Date(b.created_on) - new Date(a.created_on))
+              .slice(0,3)
+              .map(reply => ({
+                _id: reply._id,
+                text: reply.text,
+                created_on: reply.created_on
+              }))
+          }));
+        return res.json(processedThreads);
+      }
     } catch (error) {
       console.error('Error fetching threads: ', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -187,8 +206,11 @@ module.exports = function (app) {
         delete_password
       });
       // save
+      thread.bumped_on = newReply.created_on;
       thread.replies.push(newReply);
       await boardData.save()
+      console.log('new reply', newReply)
+      console.log('updated thread', thread)
       res.status(201).json(newReply);
     } catch (error) {
       console.error('Error creating reply',error);
@@ -249,12 +271,14 @@ module.exports = function (app) {
       }
       reply.deleteOne()
       await boardData.save()
-      res.status(200).json({ message: 'Reply delete successful'});
+      res.status(200).send('success');
     } catch (error) {
       console.error('Error on Reply delete', error);
       res.status(500).json({ error: 'Server internal error' });
     }
   });
+
+  
 
 
 
