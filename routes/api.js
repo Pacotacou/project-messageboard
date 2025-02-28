@@ -1,4 +1,7 @@
 'use strict';
+
+const { Board } = require('../models');
+
 const BoardModel = require('../models').Board;
 const ThreadModel = require('../models').Thread;
 const ReplyModel = require('../models').Reply;
@@ -82,7 +85,7 @@ module.exports = function (app) {
       delete response.delete_password;
       delete response.reported;
 
-      res.status(201).send('reported')
+      res.send('reported')
     } catch (error) {
       console.error('Error reporting the thread:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -91,7 +94,7 @@ module.exports = function (app) {
   // delete thread
   .delete(async (req, res) =>{
     try {
-      let { board, id: thread_id, password: delete_password } = req.body;
+      let { board, thread_id, delete_password } = req.body;
       if (!board) {
         board = req.params.board;
       }
@@ -111,14 +114,12 @@ module.exports = function (app) {
       }
 
       if (thread.delete_password !== delete_password) {
-        return res.status(403).json({ error: 'Incorrect password '});
+        return res.status(401).send('incorrect password');
       }
 
       thread.deleteOne();
       await boardData.save();
-
-      res.json({ message: 'Thread deleted successfully' });
-      
+      return res.send('success');
     } catch (error) {
       console.error('Delete thread error:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -154,7 +155,7 @@ module.exports = function (app) {
           }))
         };
         console.log('result: ', result)
-        return res.status(201).json(result)
+        return res.json(result)
       }else{
         const processedThreads = boardData.threads
           .sort((a,b) => new Date(b.bumped_on) - new Date(a.bumped_on))
@@ -209,22 +210,53 @@ module.exports = function (app) {
       thread.bumped_on = newReply.created_on;
       thread.replies.push(newReply);
       await boardData.save()
-      console.log('new reply', newReply)
-      console.log('updated thread', thread)
-      res.status(201).json(newReply);
+      res.json(newReply);
     } catch (error) {
       console.error('Error creating reply',error);
       res.status(500).json({ error: 'Server internal error '});
     }
   })
+  .get(async (req, res) => {
+    try {
+      const { board } = req.params;
+      const { thread_id } = req.query;
+      if (!board || !thread_id) {
+        return res.json({ error: 'Missing arguments' });
+      }
+      const boardData = await BoardModel.findOne({ name: board });
+      if (!boardData){
+        return res.json({ error: 'Board not found' });
+      }
+      const thread = boardData.threads.id(thread_id);
+      if (!thread){
+        return res.json({ error: 'Thread not found' });
+      }
+      const result = {
+        _id: thread._id,
+        text: thread.text,
+        bumped_on: thread.bumped_on,
+        created_on: thread.created_on,
+        replies: thread.replies.map(r => ({
+          _id: r._id,
+          text: r.text,
+          created_on: r.created_on
+        }))
+      };
+      res.json(result);
+    } catch(error) {
+      console.error('error', error);
+      res.json({ error: 'Internal server error' });
+    }
+  })
   //report reply
   .put(async (req,res) => {
     try {
-      const board = req.params;
+      const { board } = req.params;
       const { thread_id, reply_id } = req.body;
       if (!board || !thread_id || !reply_id){
         return res.status(400).json({ error: 'Missing arguments' });
       }
+      
       const boardData = await BoardModel.findOne({ name: String(board) });
       if (!boardData) {
         return res.status(400).json({ error: 'Board not found' });
@@ -239,7 +271,7 @@ module.exports = function (app) {
       }
       reply.reported = true;
       boardData.save();
-      res.status(201).json({ message:'Reply reported successfully' });
+      res.send('reported');
     } catch (error) {
       console.error('Error reporting reply ',error);
       res.status(500).json({ error: 'Server internal error' });
@@ -267,11 +299,11 @@ module.exports = function (app) {
         return res.status(400).json({ error: 'Reply not found' });
       }
       if (reply.delete_password !== delete_password) {
-        return res.status(400).json({ error: "Incorrect password" });
+        return res.status(400).send('incorrect password');
       }
-      reply.deleteOne()
+      reply.text = '[deleted]'
       await boardData.save()
-      res.status(200).send('success');
+      res.send('success');
     } catch (error) {
       console.error('Error on Reply delete', error);
       res.status(500).json({ error: 'Server internal error' });
