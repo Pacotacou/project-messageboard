@@ -49,7 +49,7 @@ const createReply = async (boardName, threadText, replyText, password) => {
   await board.save();
   
   return { 
-    board,
+    //board,
     thread: board.threads[board.threads.length - 1],
     reply: board.threads[board.threads.length - 1].replies[0]
   };
@@ -58,8 +58,6 @@ const createReply = async (boardName, threadText, replyText, password) => {
 const log = (message) =>{
   console.log(message);
 }
-
-
 
 suite('Functional Tests', function() {
   test('Create a thread with POST to /api/threads/{board}', async function() {
