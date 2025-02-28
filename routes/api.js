@@ -114,7 +114,7 @@ module.exports = function (app) {
       }
 
       if (thread.delete_password !== delete_password) {
-        return res.status(401).send('incorrect password');
+        return res.send('incorrect password');
       }
 
       thread.deleteOne();
@@ -134,13 +134,13 @@ module.exports = function (app) {
         .select('-__v');
 
       if (!boardData) {
-        return res.status(404).json({ error: 'Board not found' });
+        return res.json({ error: 'Board not found' });
       }
 
       if ( thread_id ){
-        const thread = boardData.threads.filter(e => e._id === thread_id)[0];
+        const thread = boardData.threads.filter(e => e._id == thread_id)[0];
         if (!thread) {
-          return res.status(404).json({ error: 'Thread id not found' });
+          return res.json({ error: 'Thread id not found' });
         }
         
         const result = {
@@ -154,7 +154,6 @@ module.exports = function (app) {
             created_on: r.created_on
           }))
         };
-        console.log('result: ', result)
         return res.json(result)
       }else{
         const processedThreads = boardData.threads
@@ -283,23 +282,23 @@ module.exports = function (app) {
       const { board } = req.params;
       const { thread_id, reply_id, delete_password } = req.body;
       if (!board || !thread_id || !delete_password) {
-        return res.status(400).json({ error: 'Missing arguments' });
+        return res.json({ error: 'Missing arguments' });
       }
       const boardData = await BoardModel.findOne({ name: board });
       if (!boardData) {
-        return res.status(400).json({ error: 'Board not found' });
+        return res.json({ error: 'Board not found' });
       }
       const thread = boardData.threads.id(thread_id)
       if (!thread) {
-        return res.status(400).json({ error: 'Thread not found' });
+        return res.json({ error: 'Thread not found' });
       }
       const reply = thread.replies.id(reply_id);
 
       if (!reply) {
-        return res.status(400).json({ error: 'Reply not found' });
+        return res.json({ error: 'Reply not found' });
       }
       if (reply.delete_password !== delete_password) {
-        return res.status(400).send('incorrect password');
+        return res.send('incorrect password');
       }
       reply.text = '[deleted]'
       await boardData.save()
